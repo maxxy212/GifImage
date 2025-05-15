@@ -1,4 +1,4 @@
-## Up Next: Version 1.0.0
+## Up Next: Version 1.0.1
 
 🎯 Version 1.0.0 is planned as the first major release.
 - Complete and functional

@@ -8,7 +8,7 @@ public struct GifImage: UIViewRepresentable {
     private let name: String
         
     //initialize a name
-    init(_ name: String){
+    public init(_ name: String){
         self.name = name
     }
     
@@ -152,3 +152,19 @@ private func delayForImage(at index: Int, source: CGImageSource) -> Double {
         return defaultDelay
     }
 }
+
+//struct GIFImageTest: View {
+//    var body: some View {
+//        VStack {
+//            GifImage("mixed")
+//                .frame(height: 300)
+//        }
+//    }
+//}
+//
+//
+//struct GifImage_Previews: PreviewProvider {
+//    static var previews: some View {
+//        GIFImageTest()
+//    }
+//}

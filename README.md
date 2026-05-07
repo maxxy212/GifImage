@@ -1,6 +1,6 @@
-## Up Next: Version 1.0.1
+## Up Next: Version 1.0.2
 
-🎯 Version 1.0.0 is planned as the first major release.
+🎯 Version 1.0.1 is planned as the first major release.
 - Complete and functional
 - Finalized documentation
 

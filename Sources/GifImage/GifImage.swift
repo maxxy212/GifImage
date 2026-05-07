@@ -6,21 +6,21 @@ import SwiftUI
 
 public struct GifImage: UIViewRepresentable {
     private let name: String
-        
-    //initialize a name
-    public init(_ name: String){
+    
+    public init(_ name: String) {
         self.name = name
     }
     
     public func makeUIView(context: Context) -> UIGIFImage {
         return UIGIFImage(name: name)
     }
-    //send data from SwiftUI to UIView
-    public func updateUIView(_ uiView: UIViewType, context: Context) {
+    
+    public func updateUIView(_ uiView: UIGIFImage, context: Context) {
         uiView.updateGIF(name: name)
     }
 }
 
+@MainActor
 public class UIGIFImage: UIView {
     private let imageView = UIImageView()
     private var name: String?
@@ -46,24 +46,25 @@ public class UIGIFImage: UIView {
     }
     
     func updateGIF(data: Data) {
-        updateWithImage {
-            UIImage.gifImage(data: data)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let image = await Self.loadGIF { UIImage.gifImage(data: data) }
+            self.imageView.image = image
         }
     }
     
     func updateGIF(name: String) {
-        updateWithImage {
-            UIImage.gifImage(name: name)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let image = await Self.loadGIF { UIImage.gifImage(name: name) }
+            self.imageView.image = image
         }
     }
     
-    private func updateWithImage(_ getImage: @escaping () -> UIImage?) {
-        DispatchQueue.global(qos: .userInteractive).async {
-            let image = getImage()
-            DispatchQueue.main.async {
-                self.imageView.image = image
-            }
-        }
+    private static func loadGIF(_ getImage: @Sendable @escaping () -> UIImage?) async -> UIImage? {
+        await Task.detached(priority: .userInitiated) {
+            getImage()
+        }.value
     }
     
     private func initView() {
@@ -73,13 +74,11 @@ public class UIGIFImage: UIView {
 
 internal extension UIImage {
     class func gifImage(data: Data) -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil)
-        else {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             return nil
         }
         let count = CGImageSourceGetCount(source)
         let delays = (0..<count).map {
-            // store in ms and truncate to compute GCD more easily
             Int(delayForImage(at: $0, source: source) * 1000)
         }
         let duration = delays.reduce(0, +)
@@ -90,7 +89,6 @@ internal extension UIImage {
             if let cgImage = CGImageSourceCreateImageAtIndex(source, i, nil) {
                 let frame = UIImage(cgImage: cgImage)
                 let frameCount = delays[i] / gcd
-                
                 for _ in 0..<frameCount {
                     frames.append(frame)
                 }
@@ -99,8 +97,7 @@ internal extension UIImage {
             }
         }
         
-        return UIImage.animatedImage(with: frames,
-                                     duration: Double(duration) / 1000.0)
+        return UIImage.animatedImage(with: frames, duration: Double(duration) / 1000.0)
     }
     
     class func gifImage(name: String) -> UIImage? {
@@ -115,44 +112,44 @@ internal extension UIImage {
 
 private func gcd(_ a: Int, _ b: Int) -> Int {
     let absB = abs(b)
-        let r = abs(a) % absB
-        if r != 0 {
-            return gcd(absB, r)
-        } else {
-            return absB
-        }
+    let r = abs(a) % absB
+    if r != 0 {
+        return gcd(absB, r)
+    } else {
+        return absB
+    }
 }
 
 private func delayForImage(at index: Int, source: CGImageSource) -> Double {
     let defaultDelay = 1.0
-        
+    
     let cfProperties = CGImageSourceCopyPropertiesAtIndex(source, index, nil)
     let gifPropertiesPointer = UnsafeMutablePointer<UnsafeRawPointer?>.allocate(capacity: 0)
-    defer {
-        gifPropertiesPointer.deallocate()
-    }
+    defer { gifPropertiesPointer.deallocate() }
+    
     let unsafePointer = Unmanaged.passUnretained(kCGImagePropertyGIFDictionary).toOpaque()
     if CFDictionaryGetValueIfPresent(cfProperties, unsafePointer, gifPropertiesPointer) == false {
         return defaultDelay
     }
+    
     let gifProperties = unsafeBitCast(gifPropertiesPointer.pointee, to: CFDictionary.self)
-    var delayWrapper = unsafeBitCast(CFDictionaryGetValue(gifProperties,
-                                                         Unmanaged.passUnretained(kCGImagePropertyGIFUnclampedDelayTime).toOpaque()),
-                                     to: AnyObject.self)
+    var delayWrapper = unsafeBitCast(
+        CFDictionaryGetValue(gifProperties, Unmanaged.passUnretained(kCGImagePropertyGIFUnclampedDelayTime).toOpaque()),
+        to: AnyObject.self
+    )
     if delayWrapper.doubleValue == 0 {
-        delayWrapper = unsafeBitCast(CFDictionaryGetValue(gifProperties,
-                                                         Unmanaged.passUnretained(kCGImagePropertyGIFDelayTime).toOpaque()),
-                                    to: AnyObject.self)
+        delayWrapper = unsafeBitCast(
+            CFDictionaryGetValue(gifProperties, Unmanaged.passUnretained(kCGImagePropertyGIFDelayTime).toOpaque()),
+            to: AnyObject.self
+        )
     }
     
-    if let delay = delayWrapper as? Double,
-       delay > 0 {
+    if let delay = delayWrapper as? Double, delay > 0 {
         return delay
     } else {
         return defaultDelay
     }
 }
-
 //struct GIFImageTest: View {
 //    var body: some View {
 //        VStack {
